@@ -2,41 +2,37 @@
 Satisfactory DB Backend
 """
 
-from typing import Optional
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import Depends, FastAPI, HTTPException, Path
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from starlette import status
+
+import models
+from database import SessionLocal, engine
+from models import Components
 
 app = FastAPI()
 
-
-class Component:
-    """Component"""
-
-    id_: int
-    name: str
-    is_raw_material: bool
-    tier: int
-
-    def __init__(self, id_, name, is_raw_material, tier):
-        self.id_ = id_
-        self.name = name
-        self.is_raw_material = is_raw_material
-        self.tier = tier
+models.Base.metadata.create_all(bind=engine)
 
 
-COMPONENTS = [
-    Component(1, "Iron Ore", True, 0),
-    Component(2, "Copper Ore", True, 0),
-    Component(3, "Limestone", True, 0),
-]
+def get_db():
+    """Get a DB connection"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+DBDependency = Annotated[Session, Depends(get_db)]
 
 
 class ComponentRequest(BaseModel):
     """Component Request"""
 
-    id_: Optional[int] = Field(description="ID is not needed on create", default=None)
     name: str = Field(min_length=1)
     is_raw_material: bool
     tier: int = Field(gt=-2)
@@ -49,69 +45,54 @@ class ComponentRequest(BaseModel):
 
 
 @app.get("/components", status_code=status.HTTP_200_OK)
-async def get_all_components():
+async def get_all_components(db: DBDependency):
     """Get all components"""
-    return COMPONENTS
-
-
-@app.get("/components/", status_code=status.HTTP_200_OK)
-async def get_components_by_tier(tier: int = Query(gt=-1)):
-    """Get all components of a tier"""
-    components_to_return = []
-    for comp in COMPONENTS:
-        if comp.tier == tier:
-            components_to_return.append(comp)
-
-    return components_to_return
+    return db.query(Components).all()
 
 
 @app.get("/components/{component_id}/", status_code=status.HTTP_200_OK)
-async def get_component_by_id(component_id: int = Path(gt=0)):
+async def get_component_by_id(db: DBDependency, component_id: int = Path(gt=0)):
     """Get a component by ID"""
-
-    for comp in COMPONENTS:
-        if comp.id_ == component_id:
-            return comp
+    comp_model = db.query(Components).filter(Components.id == component_id).first()
+    if comp_model is not None:
+        return comp_model
 
     raise HTTPException(status_code=404, detail="Component not found")
 
 
-@app.post("/components/create_component", status_code=status.HTTP_201_CREATED)
-async def create_component(component_request: ComponentRequest):
+@app.post("/components", status_code=status.HTTP_201_CREATED)
+async def create_component(db: DBDependency, comp_request: ComponentRequest):
     """Create new component"""
-    new_comp = Component(**component_request.model_dump())
-    COMPONENTS.append(find_comp_id(new_comp))
+    comp_model = Components(**comp_request.model_dump())
+
+    db.add(comp_model)
+    db.commit()
 
 
-@app.put("/components/update_component", status_code=status.HTTP_204_NO_CONTENT)
-async def update_component(component: ComponentRequest):
+@app.put("/components/{component_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def update_component(
+    db: DBDependency, comp_request: ComponentRequest, component_id: int = Path(gt=0)
+):
     """Update a component"""
-    comp_changed = False
-    for i, comp in enumerate(COMPONENTS):
-        if comp.id_ == component.id_:
-            COMPONENTS[i] = component
-            comp_changed = True
-
-    if not comp_changed:
+    comp_model = db.query(Components).filter(Components.id == component_id).first()
+    if comp_model is None:
         raise HTTPException(status_code=404, detail="Component not found")
+
+    comp_model.name = comp_request.name
+    comp_model.tier = comp_request.tier
+    comp_model.is_raw_material = comp_request.is_raw_material
+
+    db.add(comp_model)
+    db.commit()
 
 
 @app.delete("/components/{component_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_component(component_id: int = Path(gt=0)):
+async def delete_component(db: DBDependency, component_id: int = Path(gt=0)):
     """Delete a component"""
-    comp_changed = False
-    for i, comp in enumerate(COMPONENTS):
-        if comp.id_ == component_id:
-            COMPONENTS.pop(i)
-            comp_changed = True
-            break
 
-    if not comp_changed:
+    comp_model = db.query(Components).filter(Components.id == component_id).first()
+    if comp_model is None:
         raise HTTPException(status_code=404, detail="Component not found")
 
-
-def find_comp_id(comp: Component):
-    """Find the proper id for a new component"""
-    comp.id_ = 1 if len(COMPONENTS) == 0 else COMPONENTS[-1].id_ + 1
-
-    return comp
+    db.query(Components).filter(Components.id == component_id).delete()
+    db.commit()
