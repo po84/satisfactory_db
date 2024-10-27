@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette import status
 
-from database import SessionLocal
-from models import Components
+from ..database import SessionLocal
+from ..models import Components
 
 router = APIRouter()
 
@@ -47,7 +47,7 @@ async def get_all_components(db: DBDependency):
     return db.query(Components).all()
 
 
-@router.get("/components/{component_id}/", status_code=status.HTTP_200_OK)
+@router.get("/components/{component_id}", status_code=status.HTTP_200_OK)
 async def get_component_by_id(db: DBDependency, component_id: int = Path(gt=0)):
     """Get a component by ID"""
     comp_model = db.query(Components).filter(Components.id == component_id).first()

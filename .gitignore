@@ -166,3 +166,4 @@ cython_debug/
 
 # App setting
 data.db
+testdb.db
