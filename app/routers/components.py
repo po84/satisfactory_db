@@ -4,7 +4,8 @@ Components Router
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from starlette import status
@@ -13,6 +14,8 @@ from ..database import SessionLocal
 from ..models import Components
 
 router = APIRouter()
+
+templates = Jinja2Templates(directory="app/templates")
 
 
 def get_db():
@@ -41,6 +44,37 @@ class ComponentRequest(BaseModel):
     }
 
 
+### Pages ###
+@router.get("/components-page")
+async def render_components_page(request: Request, db: DBDependency):
+    """Componenets page rendering"""
+    components = db.query(Components).all()
+
+    return templates.TemplateResponse(
+        "components.html.j2", {"request": request, "components": components}
+    )
+
+
+@router.get("/add-component-page")
+async def render_add_component_page(request: Request):
+    """Add componenet page rendering"""
+
+    return templates.TemplateResponse("add-component.html.j2", {"request": request})
+
+
+@router.get("/edit-component-page/{component_id}")
+async def render_edit_component_page(
+    request: Request, db: DBDependency, component_id: int = Path(gt=0)
+):
+    """Edit component page rendering"""
+    component = db.query(Components).filter(Components.id == component_id).first()
+
+    return templates.TemplateResponse(
+        "edit-component.html.j2", {"request": request, "component": component}
+    )
+
+
+### Endpoints ###
 @router.get("/components", status_code=status.HTTP_200_OK)
 async def get_all_components(db: DBDependency):
     """Get all components"""

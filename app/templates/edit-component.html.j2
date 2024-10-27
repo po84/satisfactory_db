@@ -1,0 +1,29 @@
+{% include 'layout.html.j2' %}
+
+<div class="container">
+  <div class="card">
+    <div class="card-header">
+      Edit Component
+    </div>
+    <div class="card-body">
+      <form id="editComponentForm">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" class="form-control" name="name" value="{{component.name}}" required>
+        </div>
+        <div class="form-group">
+          <label>Tier</label>
+          <input type="text" class="form-control" name="tier" value="{{component.tier}}" required>
+        </div>
+        <div class="form-group form-check">
+          <input type="checkbox" class="form-check-input" name="is_raw_material" {% if component.is_raw_material %}
+            checked {% endif %}>
+          <label class="form-check-label">Raw Material</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button id="deleteButton" type="button" class="btn btn-danger">Delete</button>
+        <a href="/components-page" class="btn btn-success">Back</a>
+      </form>
+    </div>
+  </div>
+</div>
